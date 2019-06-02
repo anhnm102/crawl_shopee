@@ -4,14 +4,15 @@ const fs = require('fs');
 main();
 
 async function main() {
-  const MAX_ITEMS = 3000; // 100 ~ 5000
+  const MAX_ITEMS = 5000; // 100 ~ 5000
   const ITEMS_PER_PAGE = 100;
   const IMAGE_URL = 'https://cf.shopee.vn/file/';
 
   const listCategory = (await getListCategory()).data.category_list;
   console.log(listCategory.length + ' categories');
-
-  return listCategory.forEach(async category => {
+  
+  const du = [listCategory[0]];
+  return du.forEach(async category => {
     let pageItemIndex = 0;
     while (pageItemIndex < MAX_ITEMS) {
       const items = (await getCategoryItems(category.catid, pageItemIndex)).items;
@@ -93,7 +94,7 @@ function fetch(url) {
         }
       });
     }).on('error', e => {
-      // console.error(e);
+      console.error(e);
     });
   });
 }
