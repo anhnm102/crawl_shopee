@@ -3,48 +3,60 @@ const fs = require('fs');
 
 main();
 
-function main() {
-  fetch("https://shopee.vn/api/v2/category_list/get").then(rs => {
-    console.log(rs.data.category_list.length + ' categories');
-    return rs.data.category_list.forEach(category => {
-      let pageItemIndex = 0;
-      while (pageItemIndex < 3000) {
-        const url = `https://shopee.vn/api/v2/search_items/?by=pop&limit=100&locations=H%25C3%25A0%2520N%25E1%25BB%2599i&match_id=${category.catid}&newest=${pageItemIndex}&order=desc&page_type=search&rating_filter=4&shopee_verified=1`;
-        pageItemIndex+=100;
-        // console.log(category.display_name + ' item ' + pageItemIndex);
-        fetch(url).then(rs => {
-          rs.items.forEach((product, index) => {
-            const itemUrl = `https://shopee.vn/api/v2/item/get?itemid=${product.itemid}&shopid=${product.shopid}`;
-            // setTimeout(() => {
-              fetch(itemUrl).then(item => {
-                // convert image url
-               const imageUrl = 'https://cf.shopee.vn/file/';
-               item.item.image = imageUrl + item.item.image;
-               item.item.images = item.item.images.map(ii => imageUrl + ii);
-                if (index == 0) {
-                  fs.appendFile(`category_${category.catid}.json`, '[', function (err) {
-                    if (err) throw err;
-                    fs.appendFile(`category_${category.catid}.json`, JSON.stringify(item) + ',', function (err) {
-                      if (err) throw err;
-                    });
-                  });
+async function main() {
+  const MAX_ITEMS = 3000; // 100 ~ 5000
+  const ITEMS_PER_PAGE = 100;
+  const IMAGE_URL = 'https://cf.shopee.vn/file/';
+
+  const listCategory = (await getListCategory()).data.category_list;
+  console.log(listCategory.length + ' categories');
+
+  return listCategory.forEach(async category => {
+    let pageItemIndex = 0;
+    while (pageItemIndex < MAX_ITEMS) {
+      const items = (await getCategoryItems(category.catid, pageItemIndex)).items;
+        items.forEach(async (product, index) => {
+          const item = (await getItemDetail(product.itemid, product.shopid)).item;
+              // convert image url
+             item.image = IMAGE_URL + item.image;
+             item.images = item.images.map(ii => IMAGE_URL + ii);
+
+             const fileName = `category_${category.catid}.json`;
+
+             try {
+              if (fs.existsSync(fileName)) {
+                if (index === ITEMS_PER_PAGE - 1 && pageItemIndex === MAX_ITEMS - ITEMS_PER_PAGE) {
+                  // last item
+                  fs.appendFileSync(fileName, JSON.stringify(item) + ']');
                 } else {
-                  fs.appendFile(`category_${category.catid}.json`, JSON.stringify(item) + ',', function (err) {
-                    if (err) throw err;
-                    if (rs.items.length - 1 == index) {
-                      fs.appendFile(`category_${category.catid}.json`, ']', function (err) {
-                        if (err) throw err;
-                      });
-                    }
-                  });
+                  fs.appendFileSync(fileName, JSON.stringify(item) + ',');
                 }
-              });
-            // }, 100);
-          });
+              } else {
+                // first item
+                fs.appendFileSync(fileName, '[' + JSON.stringify(item) + ',');
+              }
+            } catch(err) {
+              console.error(err)
+            }
+
         });
-      }
-    });
+        console.log(category.display_name + ': ' + pageItemIndex);
+      pageItemIndex+=ITEMS_PER_PAGE;
+    }
   });
+  
+}
+
+function getItemDetail(itemId, shopId) {
+  return fetch(`https://shopee.vn/api/v2/item/get?itemid=${itemId}&shopid=${shopId}`);
+}
+
+function getCategoryItems(categoryId, pageItemIndex) {
+  return fetch(`https://shopee.vn/api/v2/search_items/?by=pop&limit=100&locations=H%25C3%25A0%2520N%25E1%25BB%2599i&match_id=${categoryId}&newest=${pageItemIndex}&order=desc&page_type=search&rating_filter=4&shopee_verified=1`);
+}
+
+function getListCategory() {
+  return fetch("https://shopee.vn/api/v2/category_list/get");
 }
 
 function fetch(url) {
