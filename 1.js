@@ -1,51 +1,60 @@
 const https = require("https");
 const fs = require('fs');
 
+// constants
+const MAX_ITEMS = 200; // 100 ~ 5000
+const ITEMS_PER_PAGE = 20; // 0 ~ 100
+const IMAGE_URL = 'https://cf.shopee.vn/file/';
+
 main();
 
 async function main() {
-  const MAX_ITEMS = 5000; // 100 ~ 5000
-  const ITEMS_PER_PAGE = 100;
-  const IMAGE_URL = 'https://cf.shopee.vn/file/';
-
+  const pageItemIndexs = getPageItemIndexs();
   const listCategory = (await getListCategory()).data.category_list;
   console.log(listCategory.length + ' categories');
   
   const du = [listCategory[0]];
   return du.forEach(async category => {
-    let pageItemIndex = 0;
-    while (pageItemIndex < MAX_ITEMS) {
-      const items = (await getCategoryItems(category.catid, pageItemIndex)).items;
-        items.forEach(async (product, index) => {
-          const item = (await getItemDetail(product.itemid, product.shopid)).item;
-              // convert image url
-             item.image = IMAGE_URL + item.image;
-             item.images = item.images.map(ii => IMAGE_URL + ii);
+    const fileName = `category_${category.catid}.json`;
+    const listItem = await getListItemDetail(category, pageItemIndexs);
 
-             const fileName = `category_${category.catid}.json`;
-
-             try {
-              if (fs.existsSync(fileName)) {
-                if (index === ITEMS_PER_PAGE - 1 && pageItemIndex === MAX_ITEMS - ITEMS_PER_PAGE) {
-                  // last item
-                  fs.appendFileSync(fileName, JSON.stringify(item) + ']');
-                } else {
-                  fs.appendFileSync(fileName, JSON.stringify(item) + ',');
-                }
-              } else {
-                // first item
-                fs.appendFileSync(fileName, '[' + JSON.stringify(item) + ',');
-              }
-            } catch(err) {
-              console.error(err)
-            }
-
-        });
-        console.log(category.display_name + ': ' + pageItemIndex);
-      pageItemIndex+=ITEMS_PER_PAGE;
+    try {
+      fs.appendFileSync(fileName, JSON.stringify(listItem));
+    } catch(err) {
+      console.error(err)
     }
   });
   
+}
+
+function getPageItemIndexs() {
+  let pageItemIndex = 0;
+  const pageItemIndexs = [];
+  while (pageItemIndex < MAX_ITEMS) {
+    pageItemIndexs.push(pageItemIndex);
+    pageItemIndex+=ITEMS_PER_PAGE;
+  }
+  return pageItemIndexs;
+}
+
+async function getListItemDetail(category, pageItemIndexs) {
+  return new Promise(async resolve => {
+    let total = [];
+      for (const pageIndex of pageItemIndexs) {
+        const items = (await getCategoryItems(category.catid, pageIndex)).items;
+        const rs = [];
+        for (const product of items) {
+          const item = (await getItemDetail(product.itemid, product.shopid)).item;
+          // convert image url
+          item.image = IMAGE_URL + item.image;
+          item.images = item.images.map(ii => IMAGE_URL + ii);
+          rs.push(item);
+        }
+        total = [...total, ...rs];
+        console.log(category.display_name + ': ' + (pageIndex+ITEMS_PER_PAGE));
+      }
+      resolve(total);
+  })
 }
 
 function getItemDetail(itemId, shopId) {
@@ -53,7 +62,7 @@ function getItemDetail(itemId, shopId) {
 }
 
 function getCategoryItems(categoryId, pageItemIndex) {
-  return fetch(`https://shopee.vn/api/v2/search_items/?by=pop&limit=100&locations=H%25C3%25A0%2520N%25E1%25BB%2599i&match_id=${categoryId}&newest=${pageItemIndex}&order=desc&page_type=search&rating_filter=4&shopee_verified=1`);
+  return fetch(`https://shopee.vn/api/v2/search_items/?by=pop&limit=${ITEMS_PER_PAGE}&locations=H%25C3%25A0%2520N%25E1%25BB%2599i&match_id=${categoryId}&newest=${pageItemIndex}&order=desc&page_type=search&rating_filter=4&shopee_verified=1`);
 }
 
 function getListCategory() {
